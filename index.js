@@ -7,6 +7,7 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates,
   ],
 });
 
@@ -21,10 +22,20 @@ function shuffleArray(array) {
 }
 
 // Distribute members into pods
-async function distributePods(guild) {
+async function distributePods(guild, voiceChannel) {
   try {
     // Fetch all members
     await guild.members.fetch();
+
+    // Get members in the voice channel
+    const voiceMembers = voiceChannel.members;
+
+    if (voiceMembers.size === 0) {
+      return {
+        success: false,
+        message: `No one is currently in the voice channel "${voiceChannel.name}".`
+      };
+    }
 
     // Find Pod Lead role
     const podLeadRole = guild.roles.cache.find(role => role.name === 'Pod Lead');
@@ -35,27 +46,27 @@ async function distributePods(guild) {
       };
     }
 
-    // Get all Pod Leads
-    const podLeads = guild.members.cache.filter(member =>
+    // Get all Pod Leads who are in the voice channel
+    const podLeads = voiceMembers.filter(member =>
       member.roles.cache.has(podLeadRole.id) && !member.user.bot
     );
 
     if (podLeads.size === 0) {
       return {
         success: false,
-        message: 'No Pod Leads found. Please assign the "Pod Lead" role to at least one member.'
+        message: `No Pod Leads found in the voice channel "${voiceChannel.name}". Pod Leads must be in the channel.`
       };
     }
 
-    // Get all real people (exclude bots and Pod Leads)
-    const realPeople = guild.members.cache.filter(member =>
+    // Get all real people in voice channel (exclude bots and Pod Leads)
+    const realPeople = voiceMembers.filter(member =>
       !member.user.bot && !member.roles.cache.has(podLeadRole.id)
     );
 
     if (realPeople.size === 0) {
       return {
         success: false,
-        message: 'No members to distribute into pods.'
+        message: `No members to distribute in voice channel "${voiceChannel.name}". Only Pod Leads are present.`
       };
     }
 
@@ -89,7 +100,8 @@ async function distributePods(guild) {
       success: true,
       pods,
       totalMembers: shuffledMembers.length,
-      podLeadCount: podLeads.size
+      podLeadCount: podLeads.size,
+      channelName: voiceChannel.name
     };
   } catch (error) {
     console.error('Error distributing pods:', error);
@@ -109,15 +121,32 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
   // Check if the message is the distribute command
-  if (message.content === '!distribute' || message.content === '!distributepods') {
+  if (message.content.startsWith('!distribute') || message.content.startsWith('!distributepods')) {
     // Check if user has administrator permissions
     if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return message.reply('You need Administrator permissions to use this command.');
     }
 
-    await message.reply('Distributing members into pods... Please wait.');
+    // Parse command to get channel name
+    const args = message.content.split(' ').slice(1);
+    const channelName = args.join(' ');
 
-    const result = await distributePods(message.guild);
+    if (!channelName) {
+      return message.reply('Please specify a voice channel name. Usage: `!distribute ChannelName`');
+    }
+
+    // Find the voice channel
+    const voiceChannel = message.guild.channels.cache.find(
+      channel => channel.name.toLowerCase() === channelName.toLowerCase() && channel.type === 2
+    );
+
+    if (!voiceChannel) {
+      return message.reply(`Voice channel "${channelName}" not found. Please check the channel name and try again.`);
+    }
+
+    await message.reply(`Distributing members from voice channel "${voiceChannel.name}" into pods... Please wait.`);
+
+    const result = await distributePods(message.guild, voiceChannel);
 
     if (!result.success) {
       return message.channel.send(`❌ ${result.message}`);
@@ -127,7 +156,7 @@ client.on('messageCreate', async (message) => {
     const embed = new EmbedBuilder()
       .setColor(0x0099FF)
       .setTitle('🎯 Pod Distribution Complete')
-      .setDescription(`Successfully distributed **${result.totalMembers}** members among **${result.podLeadCount}** pods.`)
+      .setDescription(`Successfully distributed **${result.totalMembers}** members from voice channel **${result.channelName}** among **${result.podLeadCount}** pods.`)
       .setTimestamp();
 
     // Add fields for each pod
@@ -151,16 +180,21 @@ client.on('messageCreate', async (message) => {
     const helpEmbed = new EmbedBuilder()
       .setColor(0x0099FF)
       .setTitle('Pod Bot Commands')
-      .setDescription('Commands for managing pod distribution')
+      .setDescription('Commands for managing pod distribution from voice channels')
       .addFields(
         {
-          name: '!distribute (or !distributepods)',
-          value: 'Randomly distributes all server members into pods based on the number of Pod Leads. Requires Administrator permissions.',
+          name: '!distribute <ChannelName>',
+          value: 'Randomly distributes members currently in a voice channel into pods.\nExample: `!distribute Lounge`\n\nRequires Administrator permissions.',
           inline: false
         },
         {
           name: 'Setup',
-          value: '1. Create a role named "Pod Lead"\n2. Assign the role to members who will lead pods\n3. Run !distribute to create pods',
+          value: '1. Create a role named "Pod Lead"\n2. Have Pod Leads join a voice channel\n3. Have other members join the same voice channel\n4. Run `!distribute ChannelName` to create pods',
+          inline: false
+        },
+        {
+          name: 'Important Notes',
+          value: '• Only distributes members currently in the specified voice channel\n• Pod Leads must be in the voice channel\n• Bots are automatically excluded',
           inline: false
         }
       )

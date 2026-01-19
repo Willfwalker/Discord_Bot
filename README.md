@@ -1,12 +1,13 @@
 # Pod Bot
 
-A Discord bot that randomly distributes server members into pods based on assigned Pod Leads.
+A Discord bot that randomly distributes members from a voice channel into pods based on assigned Pod Leads.
 
 ## Features
 
-- Randomly distributes all real members (excluding bots) into pods
-- Each pod is led by a member with the "Pod Lead" role
+- Randomly distributes members currently in a voice channel into pods
+- Each pod is led by a member with the "Pod Lead" role who is in the voice channel
 - Ensures equal or near-equal distribution of members across pods
+- Perfect for organizing breakout rooms, team activities, or study groups
 - Easy to use with simple commands
 - Requires Administrator permissions to prevent misuse
 
@@ -18,8 +19,9 @@ A Discord bot that randomly distributes server members into pods based on assign
 2. Click "New Application" and give it a name
 3. Go to the "Bot" section and click "Add Bot"
 4. Under "Privileged Gateway Intents", enable:
-   - Server Members Intent
-   - Message Content Intent
+   - **Server Members Intent** (required)
+   - **Message Content Intent** (required)
+   - **Note:** Voice States Intent is standard and doesn't need special permission
 5. Click "Reset Token" to get your bot token (save this for later)
 6. Copy your Application ID from the "General Information" section
 
@@ -62,15 +64,19 @@ npm start
 
 1. Create a role in your Discord server named **"Pod Lead"**
 2. Assign this role to members who will lead pods
-3. Run the distribution command (see below)
+3. Have Pod Leads join a voice channel
+4. Have other members join the same voice channel
+5. Run the distribution command with the channel name
 
 ### Commands
 
-- **`!distribute`** or **`!distributepods`**
-  - Randomly distributes all server members into pods
-  - Each pod is assigned to a Pod Lead
+- **`!distribute <ChannelName>`**
+  - Randomly distributes members currently in the specified voice channel into pods
+  - Example: `!distribute Lounge`
+  - Only affects members in the specified voice channel
+  - Pod Leads must be in the voice channel
   - Excludes bots from distribution
-  - Pod Leads are not included in the member pool
+  - Pod Leads are not included in the member pool (they lead the pods)
   - Requires Administrator permissions
 
 - **`!podhelp`**
@@ -78,22 +84,26 @@ npm start
 
 ## How It Works
 
-1. The bot finds all members with the "Pod Lead" role (excluding bots)
-2. It gathers all other real members (excluding bots and Pod Leads)
-3. Members are randomly shuffled
-4. Members are evenly distributed across the available Pod Leads
-5. If the division isn't perfect, extra members are distributed one per pod starting from the first pod
+1. Admin specifies a voice channel name in the command
+2. The bot checks who is currently in that voice channel
+3. It identifies Pod Leads (members with "Pod Lead" role) in the voice channel
+4. It gathers other real members in the channel (excluding bots and Pod Leads)
+5. Members are randomly shuffled
+6. Members are evenly distributed across the available Pod Leads
+7. If the division isn't perfect, extra members are distributed one per pod starting from the first pod
 
 ## Example
 
-If you have:
-- 5 Pod Leads
-- 47 members (excluding bots and Pod Leads)
+If you have in voice channel "Main Lounge":
+- 5 Pod Leads (with "Pod Lead" role)
+- 47 regular members (excluding bots and Pod Leads)
 
-The distribution would be:
+Running `!distribute Main Lounge` creates:
 - Pods 1-2: 10 members each
 - Pods 3-5: 9 members each
-- Total: 47 members distributed
+- Total: 47 members distributed among 5 pods
+
+**Note:** Only members currently in the specified voice channel are distributed.
 
 ## Requirements
 
@@ -114,11 +124,21 @@ The bot needs the following permissions:
 - Make sure Message Content Intent is enabled in the Discord Developer Portal
 - Check that the bot has permission to read and send messages in the channel
 
+**"Voice channel not found" error:**
+- Check the spelling of the channel name (case-insensitive)
+- Make sure it's a voice channel, not a text channel
+- If the channel name has spaces, include them in the command: `!distribute My Channel`
+
 **"Pod Lead role not found" error:**
 - Create a role named exactly "Pod Lead" (case-sensitive)
 
-**"No Pod Leads found" error:**
-- Assign the "Pod Lead" role to at least one member
+**"No Pod Leads found in the voice channel" error:**
+- Make sure at least one person with the "Pod Lead" role is in the specified voice channel
+- Pod Leads must be actively in the voice channel when you run the command
+
+**"No members to distribute" error:**
+- Make sure there are regular members (non-Pod Leads) in the voice channel
+- Only members currently in the voice channel will be distributed
 
 ## License
 
