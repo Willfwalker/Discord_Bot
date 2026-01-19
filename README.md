@@ -6,6 +6,9 @@ A Discord bot that randomly distributes members from a voice channel into pods b
 
 - Randomly distributes members currently in a voice channel into pods
 - Each pod is led by a member with the "Pod Lead" role who is in the voice channel
+- Automatically creates temporary voice channels for each pod
+- Moves Pod Leads and members into their respective pod channels
+- Auto-deletes pod channels when they become empty (automatic cleanup)
 - Ensures equal or near-equal distribution of members across pods
 - Perfect for organizing breakout rooms, team activities, or study groups
 - Easy to use with simple commands
@@ -27,11 +30,16 @@ A Discord bot that randomly distributes members from a voice channel into pods b
 
 ### 2. Invite the Bot to Your Server
 
-Use this URL, replacing `YOUR_CLIENT_ID` with your Application ID:
+Use this URL to invite the bot:
 
 ```
-https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=8&scope=bot
+https://discord.com/api/oauth2/authorize?client_id=1462852551958593673&permissions=16796688&scope=bot
 ```
+
+**Required Permissions:**
+- Manage Channels (create/delete pod channels)
+- Move Members (move people into pod channels)
+- Send Messages & Embed Links (send results)
 
 ### 3. Configure the Bot
 
@@ -72,11 +80,13 @@ npm start
 
 - **`!distribute <ChannelName>`**
   - Randomly distributes members currently in the specified voice channel into pods
+  - Creates temporary voice channels for each pod
+  - Moves Pod Leads and members into their pod channels
   - Example: `!distribute Lounge`
   - Only affects members in the specified voice channel
   - Pod Leads must be in the voice channel
   - Excludes bots from distribution
-  - Pod Leads are not included in the member pool (they lead the pods)
+  - Pod channels auto-delete when empty
   - Requires Administrator permissions
 
 - **`!podhelp`**
@@ -91,6 +101,9 @@ npm start
 5. Members are randomly shuffled
 6. Members are evenly distributed across the available Pod Leads
 7. If the division isn't perfect, extra members are distributed one per pod starting from the first pod
+8. Bot creates a new voice channel for each pod (named "🎯 Pod 1", "🎯 Pod 2", etc.)
+9. Bot moves each Pod Lead and their assigned members into their pod channel
+10. When a pod channel becomes empty, it's automatically deleted
 
 ## Example
 
@@ -98,12 +111,15 @@ If you have in voice channel "Main Lounge":
 - 5 Pod Leads (with "Pod Lead" role)
 - 47 regular members (excluding bots and Pod Leads)
 
-Running `!distribute Main Lounge` creates:
-- Pods 1-2: 10 members each
-- Pods 3-5: 9 members each
-- Total: 47 members distributed among 5 pods
+Running `!distribute Main Lounge`:
+1. Creates 5 new voice channels: "🎯 Pod 1" through "🎯 Pod 5"
+2. Distributes members:
+   - Pods 1-2: 10 members each
+   - Pods 3-5: 9 members each
+3. Moves everyone into their assigned pod channels
+4. Original "Main Lounge" channel is left empty
 
-**Note:** Only members currently in the specified voice channel are distributed.
+**Note:** Pod channels automatically delete when everyone leaves.
 
 ## Requirements
 
@@ -114,9 +130,11 @@ Running `!distribute Main Lounge` creates:
 ## Permissions Required
 
 The bot needs the following permissions:
-- Read Messages/View Channels
-- Send Messages
-- Manage Roles (optional, for future features)
+- **Manage Channels** (create and delete pod voice channels)
+- **Move Members** (move members into pod channels)
+- **Read Messages/View Channels**
+- **Send Messages**
+- **Embed Links** (for formatted output)
 
 ## Troubleshooting
 

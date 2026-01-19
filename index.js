@@ -77,7 +77,7 @@ async function distributePods(guild, voiceChannel) {
     const membersPerPod = Math.floor(shuffledMembers.length / podLeads.size);
     const remainder = shuffledMembers.length % podLeads.size;
 
-    // Create pods
+    // Create pods with voice channels
     const pods = [];
     const podLeadArray = Array.from(podLeads.values());
     let currentIndex = 0;
@@ -87,10 +87,35 @@ async function distributePods(guild, voiceChannel) {
       const podSize = membersPerPod + (i < remainder ? 1 : 0); // Distribute remainder
       const podMembers = shuffledMembers.slice(currentIndex, currentIndex + podSize);
 
+      // Create voice channel for this pod
+      const podChannel = await guild.channels.create({
+        name: `🎯 Pod ${i + 1}`,
+        type: 2, // Voice channel
+        parent: voiceChannel.parent, // Same category as original channel
+        userLimit: podSize + 1, // Pod Lead + members
+      });
+
+      // Move Pod Lead to the channel
+      try {
+        await podLead.voice.setChannel(podChannel);
+      } catch (error) {
+        console.error(`Failed to move Pod Lead ${podLead.user.tag}:`, error.message);
+      }
+
+      // Move members to the channel
+      for (const member of podMembers) {
+        try {
+          await member.voice.setChannel(podChannel);
+        } catch (error) {
+          console.error(`Failed to move ${member.user.tag}:`, error.message);
+        }
+      }
+
       pods.push({
         lead: podLead,
         members: podMembers,
-        size: podSize
+        size: podSize,
+        channel: podChannel
       });
 
       currentIndex += podSize;
@@ -114,6 +139,24 @@ async function distributePods(guild, voiceChannel) {
 
 client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}!`);
+});
+
+// Auto-cleanup: Delete pod channels when empty
+client.on('voiceStateUpdate', async (oldState, newState) => {
+  // Check if someone left a channel
+  if (oldState.channel && oldState.channel !== newState.channel) {
+    const channel = oldState.channel;
+
+    // Check if it's a pod channel (starts with 🎯 Pod)
+    if (channel.name.startsWith('🎯 Pod') && channel.members.size === 0) {
+      try {
+        await channel.delete();
+        console.log(`Deleted empty pod channel: ${channel.name}`);
+      } catch (error) {
+        console.error(`Failed to delete channel ${channel.name}:`, error.message);
+      }
+    }
+  }
 });
 
 client.on('messageCreate', async (message) => {
@@ -160,13 +203,13 @@ client.on('messageCreate', async (message) => {
       .setTimestamp();
 
     // Add fields for each pod
-    result.pods.forEach((pod, index) => {
+    result.pods.forEach((pod) => {
       const memberList = pod.members
         .map(m => `• ${m.user.tag}`)
         .join('\n') || 'No members assigned';
 
       embed.addFields({
-        name: `Pod ${index + 1} - Led by ${pod.lead.user.tag} (${pod.size} members)`,
+        name: `${pod.channel.name} - Led by ${pod.lead.user.tag} (${pod.size} members)`,
         value: memberList.length > 1024 ? memberList.substring(0, 1021) + '...' : memberList,
         inline: false
       });
@@ -184,7 +227,7 @@ client.on('messageCreate', async (message) => {
       .addFields(
         {
           name: '!distribute <ChannelName>',
-          value: 'Randomly distributes members currently in a voice channel into pods.\nExample: `!distribute Lounge`\n\nRequires Administrator permissions.',
+          value: 'Randomly distributes members currently in a voice channel into pods.\n• Creates temporary voice channels for each pod\n• Moves everyone into their pod channels\n• Channels auto-delete when empty\n\nExample: `!distribute Lounge`\n\nRequires Administrator permissions.',
           inline: false
         },
         {
@@ -194,7 +237,7 @@ client.on('messageCreate', async (message) => {
         },
         {
           name: 'Important Notes',
-          value: '• Only distributes members currently in the specified voice channel\n• Pod Leads must be in the voice channel\n• Bots are automatically excluded',
+          value: '• Only distributes members currently in the specified voice channel\n• Pod Leads must be in the voice channel\n• Bots are automatically excluded\n• Pod channels are created in the same category as the original channel',
           inline: false
         }
       )
